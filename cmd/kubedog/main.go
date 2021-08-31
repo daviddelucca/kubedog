@@ -69,6 +69,8 @@ func main() {
 	}
 
 	init := func() {
+		fmt.Println(kubeContext)
+		fmt.Println(kubeConfig)
 		err := kube.Init(kube.InitOptions{kube.KubeConfigOptions{Context: kubeContext, ConfigPath: kubeConfig}})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Unable to initialize kube: %s\n", err)
@@ -129,14 +131,17 @@ func main() {
 				logboek.Context(context.Background()).Streams().SetPrefix(outputPrefix)
 			}
 
-			specsInput, err := ioutil.ReadAll(os.Stdin)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading stdin: %s\n", err)
-				os.Exit(1)
-			}
+			// specsInput, err := ioutil.ReadAll(os.Stdin)
+			// if err != nil {
+			// 	fmt.Fprintf(os.Stderr, "Error reading stdin: %s\n", err)
+			// 	os.Exit(1)
+			// }
+
+			specsInput := []byte("{\"Canaries\":[{\"ResourceName\":\"iti-auth-partner\",\"Namespace\":\"iti-auth-partner\"}] }")
 
 			specs := multitrack.MultitrackSpecs{}
-			err = json.Unmarshal(specsInput, &specs)
+			// err = json.Unmarshal(specsInput, &specs)
+			err := json.Unmarshal(specsInput, &specs)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error parsing MultitrackSpecs json: %s\n", err)
 				os.Exit(1)
@@ -311,9 +316,10 @@ func main() {
 		},
 	})
 
-	err := rootCmd.Execute()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
-	}
+	multitrackCmd.Execute()
+	// err := rootCmd.Execute()
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+	// 	os.Exit(1)
+	// }
 }

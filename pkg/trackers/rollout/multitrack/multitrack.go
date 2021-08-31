@@ -14,6 +14,7 @@ import (
 	"github.com/werf/logboek/pkg/types"
 
 	"github.com/werf/kubedog/pkg/tracker"
+	"github.com/werf/kubedog/pkg/tracker/canary"
 	"github.com/werf/kubedog/pkg/tracker/daemonset"
 	"github.com/werf/kubedog/pkg/tracker/deployment"
 	"github.com/werf/kubedog/pkg/tracker/job"
@@ -52,6 +53,7 @@ type MultitrackSpecs struct {
 	StatefulSets []MultitrackSpec
 	DaemonSets   []MultitrackSpec
 	Jobs         []MultitrackSpec
+	Canaries     []MultitrackSpec
 }
 
 type MultitrackSpec struct {
@@ -111,7 +113,7 @@ func setDefaultSpecValues(spec *MultitrackSpec) {
 }
 
 func Multitrack(kube kubernetes.Interface, specs MultitrackSpecs, opts MultitrackOptions) error {
-	if len(specs.Deployments)+len(specs.StatefulSets)+len(specs.DaemonSets)+len(specs.Jobs) == 0 {
+	if len(specs.Deployments)+len(specs.StatefulSets)+len(specs.DaemonSets)+len(specs.Jobs)+len(specs.Canaries) == 0 {
 		return nil
 	}
 
@@ -126,6 +128,9 @@ func Multitrack(kube kubernetes.Interface, specs MultitrackSpecs, opts Multitrac
 	}
 	for i := range specs.Jobs {
 		setDefaultSpecValues(&specs.Jobs[i])
+	}
+	for i := range specs.Canaries {
+		setDefaultSpecValues(&specs.Canaries[i])
 	}
 
 	mt := multitracker{
@@ -152,6 +157,12 @@ func Multitrack(kube kubernetes.Interface, specs MultitrackSpecs, opts Multitrac
 		TrackingJobs:     make(map[string]*multitrackerResourceState),
 		JobsStatuses:     make(map[string]job.JobStatus),
 		PrevJobsStatuses: make(map[string]job.JobStatus),
+
+		CanariesSpecs:        make(map[string]MultitrackSpec),
+		CanariesContexts:     make(map[string]*multitrackerContext),
+		TrackingCanaries:     make(map[string]*multitrackerResourceState),
+		CanariesStatuses:     make(map[string]canary.CanaryStatus),
+		PrevCanariesStatuses: make(map[string]canary.CanaryStatus),
 
 		serviceMessagesByResource: make(map[string][]string),
 	}
@@ -252,6 +263,18 @@ func (mt *multitracker) Start(kube kubernetes.Interface, specs MultitrackSpecs, 
 		})
 	}
 
+	for _, spec := range specs.Canaries {
+		mt.CanariesContexts[spec.ResourceName] = newMultitrackerContext(opts.ParentContext)
+		mt.CanariesSpecs[spec.ResourceName] = spec
+		mt.TrackingCanaries[spec.ResourceName] = newMultitrackerResourceState(spec)
+
+		wg.Add(1)
+
+		go mt.runSpecTracker("canary", spec, mt.CanariesContexts[spec.ResourceName], &wg, mt.CanariesContexts, doneChan, errorChan, func(spec MultitrackSpec, mtCtx *multitrackerContext) error {
+			return mt.TrackCanary(kube, spec, newMultitrackOptions(mtCtx.Context, opts.Timeout, opts.StatusProgressPeriod, opts.LogsFromTime))
+		})
+	}
+
 	if err := mt.applyTrackTerminationMode(); err != nil {
 		errorChan <- fmt.Errorf("unable to apply termination mode: %s", err)
 		return
@@ -334,6 +357,12 @@ func (mt *multitracker) applyTrackTerminationMode() error {
 		}
 		contextsToStop = append(contextsToStop, ctx)
 	}
+	for name, ctx := range mt.CanariesContexts {
+		if shouldContinueTracking(name, mt.CanariesSpecs[name]) {
+			return nil
+		}
+		contextsToStop = append(contextsToStop, ctx)
+	}
 
 	mt.isTerminating = true
 
@@ -400,6 +429,12 @@ type multitracker struct {
 	JobsStatuses     map[string]job.JobStatus
 	PrevJobsStatuses map[string]job.JobStatus
 
+	CanariesSpecs        map[string]MultitrackSpec
+	CanariesContexts     map[string]*multitrackerContext
+	TrackingCanaries     map[string]*multitrackerResourceState
+	CanariesStatuses     map[string]canary.CanaryStatus
+	PrevCanariesStatuses map[string]canary.CanaryStatus
+
 	mux sync.Mutex
 
 	isFailed      bool
@@ -451,6 +486,7 @@ func (mt *multitracker) hasFailedTrackingResources() bool {
 		mt.TrackingStatefulSets,
 		mt.TrackingDaemonSets,
 		mt.TrackingJobs,
+		mt.TrackingCanaries,
 	} {
 		for _, state := range states {
 			if state.Status == resourceFailed {
@@ -487,6 +523,12 @@ func (mt *multitracker) formatFailedTrackingResourcesError() error {
 			continue
 		}
 		msgParts = append(msgParts, fmt.Sprintf("job/%s failed: %s", name, state.FailedReason))
+	}
+	for name, state := range mt.TrackingCanaries {
+		if state.Status != resourceFailed {
+			continue
+		}
+		msgParts = append(msgParts, fmt.Sprintf("canary/%s failed: %s", name, state.FailedReason))
 	}
 
 	return fmt.Errorf("%s", strings.Join(msgParts, "\n"))
