@@ -82,13 +82,12 @@ func (canary *Tracker) Track(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("BLABLA")
 	for {
 		// TODO Rever e tratar as 3 situacoes
 		fmt.Println("QQQQQQQ")
 		select {
 		case object := <-canary.objectAdded:
-			fmt.Println("TO AQUI", object)
 			if err := canary.handleCanaryState(ctx, object); err != nil {
 				return err
 			}
@@ -115,9 +114,6 @@ func (canary *Tracker) Track(ctx context.Context) error {
 func (canary *Tracker) runInformer(ctx context.Context) error {
 	// TODO rever
 	fmt.Println("AQUI")
-	fmt.Println(canary.Namespace)
-	fmt.Println(canary.ResourceName)
-
 	config, err := kube.GetKubeConfig(kube.KubeConfigOptions{})
 	if err != nil {
 		fmt.Print(err)
@@ -136,11 +132,9 @@ func (canary *Tracker) runInformer(ctx context.Context) error {
 	}
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			fmt.Println("list")
 			return flagger.Canaries(canary.Namespace).List(ctx, tweakListOptions(options))
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			fmt.Println("watch")
 			return flagger.Canaries(canary.Namespace).Watch(ctx, tweakListOptions(options))
 		},
 	}
@@ -156,13 +150,12 @@ func (canary *Tracker) runInformer(ctx context.Context) error {
 			if e.Type != watch.Error {
 				var ok bool
 				object, ok = e.Object.(*v1beta1.Canary)
-				fmt.Println("canary", object)
 				if !ok {
 					return true, fmt.Errorf("expected %s to be a *v1beta1.Canary, got %T", canary.ResourceName, e.Object)
 				}
 			}
 
-			fmt.Println("e", e)
+			fmt.Println("e", e.Type)
 
 			if e.Type == watch.Added {
 				canary.objectAdded <- object
@@ -195,8 +188,34 @@ func (canary *Tracker) handleCanaryState(ctx context.Context, object *v1beta1.Ca
 	status := NewCanaryStatus(object, canary.StatusGeneration, canary.State == tracker.ResourceFailed, canary.failedReason, canary.canaryStatuses)
 
 	fmt.Println("Bla2", canary.State)
+	fmt.Println("Bla3", status.IsSucceeded)
 
 	switch canary.State {
+	case tracker.Initial:
+		// canary.runPodsInformer(ctx, object)
+		if status.IsFailed {
+			canary.State = tracker.ResourceFailed
+			canary.Failed <- status
+		} else if status.IsSucceeded {
+			fmt.Println("SUCCEEDED2")
+			canary.State = tracker.ResourceSucceeded
+			canary.Succeeded <- status
+		} else {
+			fmt.Println("ELSE")
+			canary.State = tracker.ResourceAdded
+			canary.Succeeded <- status
+		}
+	case tracker.ResourceAdded, tracker.ResourceFailed:
+		fmt.Println("CASENOVO")
+		if status.IsFailed {
+			canary.State = tracker.ResourceFailed
+			canary.Failed <- status
+		} else if status.IsSucceeded {
+			canary.State = tracker.ResourceSucceeded
+			canary.Succeeded <- status
+		} else {
+			canary.Status <- status
+		}
 	case tracker.ResourceSucceeded:
 		fmt.Println("SUCCEEDED")
 		canary.State = tracker.ResourceSucceeded

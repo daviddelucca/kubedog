@@ -56,16 +56,16 @@ func (mt *multitracker) TrackCanary(kube kubernetes.Interface, spec MultitrackSp
 func (mt *multitracker) canarySucceeded(spec MultitrackSpec, feed canary.Feed) error {
 	mt.displayResourceTrackerMessageF("canary", spec, "succeeded")
 
-	return mt.handleResourceReadyCondition(mt.TrackingJobs, spec)
+	return mt.handleResourceReadyCondition(mt.TrackingCanaries, spec)
 }
 
 func (mt *multitracker) canaryFailed(spec MultitrackSpec, feed canary.Feed, reason string) error {
-	mt.displayResourceErrorF("deploy", spec, "%s", reason)
+	mt.displayResourceErrorF("canary", spec, "%s", reason)
 
 	return mt.handleResourceFailure(mt.TrackingCanaries, "deploy", spec, reason)
 }
 
 func (mt *multitracker) canaryEventMsg(spec MultitrackSpec, feed canary.Feed, msg string) error {
-	mt.displayResourceEventF("deploy", spec, "%s", msg)
+	mt.displayResourceEventF("canary", spec, "%s", msg)
 	return nil
 }

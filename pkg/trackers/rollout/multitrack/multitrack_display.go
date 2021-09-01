@@ -279,7 +279,7 @@ func (mt *multitracker) displayCanariesProgress() {
 			// TODO rever
 			t.Row(resource, status.CanaryStatus, status.CanaryWeight, "-")
 		} else {
-			t.Row(resource, status.CanaryStatus, status.CanaryWeight, status.LastTransitionTime)
+			t.Row(resource, status.CanaryStatus.Phase, status.CanaryWeight, status.LastTransitionTime)
 		}
 
 		// if len(status.Pods) > 0 {

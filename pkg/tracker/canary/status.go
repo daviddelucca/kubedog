@@ -14,8 +14,9 @@ type CanaryStatus struct {
 	StatusGeneration uint64
 
 	StatusIndicator *indicators.StringEqualConditionIndicator
-	Duration        string
-	Age             string
+
+	Duration string
+	Age      string
 
 	WaitingForMessages []string
 
@@ -29,32 +30,28 @@ func NewCanaryStatus(object *v1beta1.Canary, statusGeneration uint64, isTrackerF
 	res := CanaryStatus{
 		CanaryStatus:     object.Status,
 		StatusGeneration: statusGeneration,
+		StatusIndicator:  &indicators.StringEqualConditionIndicator{},
 		Age:              utils.TranslateTimestampSince(object.CreationTimestamp),
 	}
-
-	// doCheckCanaryConditions := true
-	// for _, trackedPodName := range trackedPodsNames {
-	// 	podStatus := podsStatuses[trackedPodName]
-
-	// 	if !podStatus.IsFailed && !podStatus.IsSucceeded {
-	// 		doCheckJobConditions = false // unterminated pods exists
-	// 	}
-	// }
 
 	// TODO validar status
 
 	if object.Status.Phase == v1beta1.CanaryPhaseSucceeded {
 		res.IsSucceeded = true
+	} else {
+		// res.StatusIndicator =
+		fmt.Println("ASD", object.Status)
+		fmt.Println("ASD", res.StatusIndicator)
+		res.StatusIndicator.Value = string(object.Status.Phase)
+		// res.IsSucceeded = true
 	}
 
-	//if object.Status.Phase != "Succeeded" && object.Status.Phase != "Failed" {
-
-	// res.WaitingForMessages = append(res.WaitingForMessages, fmt.Sprintf("rollout %d", res.CanaryWeight))
-
-	// status
-	// weight
-
 	fmt.Println("BLA", res.IsSucceeded)
+
+	// if !res.IsSucceeded && !res.IsFailed {
+	// 	res.IsFailed = isTrackerFailed
+	// 	res.FailedReason = trackerFailedReason
+	// }
 
 	return res
 }
