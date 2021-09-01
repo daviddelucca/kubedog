@@ -224,7 +224,7 @@ func (mt *multitracker) displayStatusProgress() error {
 		logboek.Context(context.Background()).LogOptionalLn()
 	}
 
-	caption := utils.BoldF("Status progress")
+	caption := utils.BoldF("Status progressbla")
 
 	logboek.Context(context.Background()).Default().LogBlock(caption).
 		Options(func(options types.LogBlockOptionsInterface) {
@@ -235,11 +235,75 @@ func (mt *multitracker) displayStatusProgress() error {
 			mt.displayDaemonSetsStatusProgress()
 			mt.displayStatefulSetsStatusProgress()
 			mt.displayJobsProgress()
+			mt.displayCanariesProgress()
 		})
 
 	logboek.Context(context.Background()).LogOptionalLn()
 
 	return nil
+}
+
+func (mt *multitracker) displayCanariesProgress() {
+	t := utils.NewTable(statusProgressTableRatio...)
+	t.SetWidth(logboek.Context(context.Background()).Streams().ContentWidth() - 1)
+	t.Header("NAME", "STATUS", "WEIGHT", "LASTTRANSACTIONTIME")
+
+	resourcesNames := []string{}
+	for name := range mt.CanariesSpecs {
+		resourcesNames = append(resourcesNames, name)
+	}
+	sort.Strings(resourcesNames)
+
+	for _, name := range resourcesNames {
+		fmt.Println("bla", name)
+		// prevStatus := mt.PrevCanariesStatuses[name]
+		status := mt.CanariesStatuses[name]
+
+		spec := mt.CanariesSpecs[name]
+
+		// TODO rever
+		// showProgress := status.StatusGeneration > prevStatus.StatusGeneration
+		// disableWarningColors := spec.FailMode == IgnoreAndContinueDeployProcess
+
+		resource := formatResourceCaption(name, spec.FailMode, status.IsSucceeded, status.IsFailed, true)
+
+		// succeeded := "-"
+		// if status.SucceededIndicator != nil {
+		// 	succeeded = status.SucceededIndicator.FormatTableElem(prevStatus.SucceededIndicator, indicators.FormatTableElemOptions{
+		// 		ShowProgress:         showProgress,
+		// 		DisableWarningColors: disableWarningColors,
+		// 	})
+		// }
+
+		if status.IsFailed {
+			// TODO rever
+			t.Row(resource, status.CanaryStatus, status.CanaryWeight, "-")
+		} else {
+			t.Row(resource, status.CanaryStatus, status.CanaryWeight, status.LastTransitionTime)
+		}
+
+		// if len(status.Pods) > 0 {
+		// 	newPodsNames := []string{}
+		// 	for podName := range status.Pods {
+		// 		newPodsNames = append(newPodsNames, podName)
+		// 	}
+
+		// 	st := mt.displayChildPodsStatusProgress(&t, prevStatus.Pods, status.Pods, newPodsNames, spec.FailMode, showProgress, disableWarningColors)
+
+		// 	extraMsg := ""
+		// 	if len(status.WaitingForMessages) > 0 {
+		// 		extraMsg += "---\n"
+		// 		extraMsg += utils.BlueF("Waiting for: %s", strings.Join(status.WaitingForMessages, ", "))
+		// 	}
+		// 	st.Commit(extraMsg)
+		// }
+
+		// mt.PrevJobsStatuses[name] = status
+	}
+
+	if len(resourcesNames) > 0 {
+		logboek.Context(context.Background()).Log(t.Render())
+	}
 }
 
 func (mt *multitracker) displayJobsProgress() {

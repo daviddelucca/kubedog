@@ -271,6 +271,7 @@ func (mt *multitracker) Start(kube kubernetes.Interface, specs MultitrackSpecs, 
 		wg.Add(1)
 
 		go mt.runSpecTracker("canary", spec, mt.CanariesContexts[spec.ResourceName], &wg, mt.CanariesContexts, doneChan, errorChan, func(spec MultitrackSpec, mtCtx *multitrackerContext) error {
+			fmt.Println("bla11")
 			return mt.TrackCanary(kube, spec, newMultitrackOptions(mtCtx.Context, opts.Timeout, opts.StatusProgressPeriod, opts.LogsFromTime))
 		})
 	}

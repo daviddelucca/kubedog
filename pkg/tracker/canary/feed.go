@@ -59,11 +59,11 @@ func (f *feed) Track(name, namespace string, kube kubernetes.Interface, opts tra
 	ctx, cancel := watchtools.ContextWithOptionalTimeout(parentContext, opts.Timeout)
 	defer cancel()
 
-	job := NewTracker(name, namespace, kube, opts)
+	canary := NewTracker(name, namespace, kube, opts)
 
 	go func() {
 		fmt.Println("feed.go")
-		err := job.Track(ctx)
+		err := canary.Track(ctx)
 		if err != nil {
 			errorChan <- err
 		} else {
@@ -72,8 +72,21 @@ func (f *feed) Track(name, namespace string, kube kubernetes.Interface, opts tra
 	}()
 
 	for {
+		fmt.Println("PQP", canary)
 		select {
-		case status := <-job.Succeeded:
+		case status := <-canary.Added:
+			f.setStatus(status)
+
+			if f.OnSucceededFunc != nil {
+				err := f.OnSucceededFunc()
+				if err == tracker.StopTrack {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+			}
+		case status := <-canary.Succeeded:
 			f.setStatus(status)
 
 			if f.OnSucceededFunc != nil {
@@ -86,7 +99,7 @@ func (f *feed) Track(name, namespace string, kube kubernetes.Interface, opts tra
 				}
 			}
 
-		case status := <-job.Failed:
+		case status := <-canary.Failed:
 			f.setStatus(status)
 
 			if f.OnFailedFunc != nil {
@@ -99,7 +112,7 @@ func (f *feed) Track(name, namespace string, kube kubernetes.Interface, opts tra
 				}
 			}
 
-		case msg := <-job.EventMsg:
+		case msg := <-canary.EventMsg:
 			if f.OnEventMsgFunc != nil {
 				err := f.OnEventMsgFunc(msg)
 				if err == tracker.StopTrack {
@@ -110,7 +123,7 @@ func (f *feed) Track(name, namespace string, kube kubernetes.Interface, opts tra
 				}
 			}
 
-		case status := <-job.Status:
+		case status := <-canary.Status:
 			f.setStatus(status)
 
 			if f.OnStatusFunc != nil {
@@ -141,6 +154,7 @@ func (f *feed) setStatus(status CanaryStatus) {
 }
 
 func (f *feed) GetStatus() CanaryStatus {
+	fmt.Println("1234")
 	f.statusMux.Lock()
 	defer f.statusMux.Unlock()
 	return f.status

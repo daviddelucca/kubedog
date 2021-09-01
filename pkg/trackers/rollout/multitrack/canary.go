@@ -1,14 +1,19 @@
 package multitrack
 
 import (
+	"fmt"
+
 	"github.com/werf/kubedog/pkg/tracker/canary"
 	"k8s.io/client-go/kubernetes"
 )
 
 func (mt *multitracker) TrackCanary(kube kubernetes.Interface, spec MultitrackSpec, opts MultitrackOptions) error {
+	fmt.Println("1")
 	feed := canary.NewFeed()
+	fmt.Println("2")
 
 	feed.OnSucceeded(func() error {
+		fmt.Println("onSucceeded")
 		mt.mux.Lock()
 		defer mt.mux.Unlock()
 
@@ -17,6 +22,7 @@ func (mt *multitracker) TrackCanary(kube kubernetes.Interface, spec MultitrackSp
 		return mt.canarySucceeded(spec, feed)
 	})
 	feed.OnFailed(func(reason string) error {
+		fmt.Println("OnFailed")
 		mt.mux.Lock()
 		defer mt.mux.Unlock()
 
@@ -25,6 +31,7 @@ func (mt *multitracker) TrackCanary(kube kubernetes.Interface, spec MultitrackSp
 		return mt.canaryFailed(spec, feed, reason)
 	})
 	feed.OnEventMsg(func(msg string) error {
+		fmt.Println("onEventMsg")
 		mt.mux.Lock()
 		defer mt.mux.Unlock()
 
@@ -34,6 +41,7 @@ func (mt *multitracker) TrackCanary(kube kubernetes.Interface, spec MultitrackSp
 	})
 
 	feed.OnStatus(func(status canary.CanaryStatus) error {
+		fmt.Println("onStatus")
 		mt.mux.Lock()
 		defer mt.mux.Unlock()
 
